@@ -24,6 +24,9 @@ we require the tokenizer to output these tokens as &lt;, &gt;, &quot;, and &amp;
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
+
+FILE *xml;
 
 char* keyword[] = {"class", "constructor", "function", "method", "int", "boolean", "char", "void", "var", "static", "field", "let", "do", "if", "else", "while", "return", "true", "false", "null", "this"};
 char symbol[] = {'{', '}', '(', ')', '[', ']', '.', ',', ';', '+', '-', '*', '/', '&', '|', '<', '>', '=', '~'};
@@ -71,22 +74,16 @@ void analyzeLine(char *buffer) {
 	int left = 0, right = 0;
 	int len = strlen(buffer);
 
-	//printf("[DEBUG] Analyzing line: \"%s\"\n", buffer);
 	while (right <= len && left <= right) {
-		//printf("[DEBUG] Current token: \"%.*s\"\n", right - left, buffer + left);
-		//printf("[DEBUG] Current position: (%d, %d)\n", left, right);
 		if (buffer[right] == '/' && buffer[right+1] == '/') {
-			//printf("[DEBUG] Found comment, breaking loop\n");
 			return;
 		}
 
 		if (buffer[right] == '/' && buffer[right+1] == '*' && !multiLineComment) {
-			//printf("[DEBUG] Found start of multi line comment, enabling multi line comment mode\n");
 			multiLineComment = true;
 		}
 
 		if (buffer[right] == '*' && buffer[right+1] == '/' && multiLineComment) {
-			//printf("[DEBUG] Found end of multi line comment, disabling multi line comment mode\n");
 			multiLineComment = false;
 			right += 2;
 			left = right;
@@ -94,15 +91,13 @@ void analyzeLine(char *buffer) {
 		}
 
 		if (buffer[right] == '"' && !stringLiteral) {
-			//printf("[DEBUG] Found start of string literal, enabling string literal mode\n");
 			right++;
 			left = right;
 			stringLiteral = true;
 		}
 
 		if (buffer[right] == '"' && stringLiteral) {
-			//printf("[DEBUG] Found end of string literal, disabling string literal mode\n");
-			printf("<stringConstant> %s </stringConstant>\n", getSubstring(buffer, left, right-1));
+			fprintf(xml, "<stringConstant> %s </stringConstant>\n", getSubstring(buffer, left, right-1));
 			right++;
 			left = right;
 			stringLiteral = false;
@@ -113,115 +108,45 @@ void analyzeLine(char *buffer) {
 		
 		if (isDelimiter(buffer[right]) && left == right && !multiLineComment && !stringLiteral) {
 			if (isSymbol(buffer[right])) {
-				//printf("[DEBUG] Found symbol: '%c'\n", buffer[right]);
 				switch(buffer[right]) {
 						case '<':
-							printf("<symbol> &lt; </symbol>\n");
+							fprintf(xml, "<symbol> &lt; </symbol>\n");
 							break;
 						case '>':
-							printf("<symbol> &gt; </symbol>\n");
+							fprintf(xml, "<symbol> &gt; </symbol>\n");
 							break;
 						case '"':
-							printf("<symbol> &quot; </symbol>\n");
+							fprintf(xml, "<symbol> &quot; </symbol>\n");
 							break;
 						case '&':
-							printf("<symbol> &amp; </symbol>\n");
+							fprintf(xml, "<symbol> &amp; </symbol>\n");
 							break;
 						default:
-							printf("<symbol> %c </symbol>\n", buffer[right]);
-							brea
+							fprintf(xml, "<symbol> %c </symbol>\n", buffer[right]);
+							break;
 					}
 			}
 			right++;
 			left = right;
 		} else if (isDelimiter(buffer[right]) && left != right && !multiLineComment && !stringLiteral) {
 			char* token = getSubstring(buffer, left, right-1);
-			//printf("[DEBUG] Found token: \"%s\"\n", token);
 
-			if (isKeyword(token)) {
-				printf("<keyword> %s </keyword>\n", token);
+			int i = 0;
+			while (isdigit(token[i])) 
+				i++;
+
+			if (i == strlen(token)) {
+				fprintf(xml, "<integerConstant> %s </integerConstant>\n", token);
+			} else if (isKeyword(token)) {
+				fprintf(xml, "<keyword> %s </keyword>\n", token);
 			} else {
-				printf("<identifier> %s </identifier>\n", token);
-			}
+				fprintf(xml, "<identifier> %s </identifier>\n", token);
+			} 
+			
+
 			left = right;
 		}
 	}
-
-
-
-
-
-
-	/*
-	//printf("buffer: \"%s\"\n", buffer);
-	int i = 0;
-
-	// while not at end of line and not working inside multi line comment
-	if (!multiLineComment) {
-		
-		char bufCpy[strlen(buffer)+1];
-		strcpy(bufCpy, buffer);
-		char* token = strtok(bufCpy, " {}()[].,;+-/*&|<>=~\t");
-		while (token != NULL) {
-			// check for keyword
-			for (int j = 0; j < sizeof(keyword)/sizeof(keyword[0]); j++) {
-				if (strcmp(token, keyword[j]) == 0) {
-					printf("<keyword> %s </keyword>\n", keyword[j]);
-				}
-			}
-			token = strtok(NULL, " {}()[].,;+-/*&|<>=~\t");
-		}
-		
-
-		while (buffer[i] != '\0') {
-			// single line comment, skip the line
-			if (buffer[i] == '/' && buffer[i+1] == '/') {
-				return;
-			}
-			// check if working with multi line comment
-			else if (buffer[i] == '/' && buffer[i+1] == '*') {
-				multiLineComment = true;
-				break;
-			}
-			// skip whitespace
-			else if (buffer[i] == ' ') { 
-				i++;
-				continue;
-			}
-
-			// check for symbol
-			for (int j = 0; j < sizeof(symbol)/sizeof(symbol[0]); j++) {
-				if (buffer[i] == symbol[j]) {
-					switch(symbol[j]) {
-						case '<':
-							printf("<symbol> &lt; </symbol>\n");
-							break;
-						case '>':
-							printf("<symbol> &gt; </symbol>\n");
-							break;
-						case '"':
-							printf("<symbol> &quot; </symbol>\n");
-							break;
-						case '&':
-							printf("<symbol> &amp; </symbol>\n");
-							break;
-						default:
-							printf("<symbol> %c </symbol>\n", symbol[j]);
-					}
-				}
-			}
-			i++;
-		}
-	}
-
-	// while not at end of line and working inside multi line comment
-	while (buffer[i] != '\0' && multiLineComment) {
-		if (buffer[i] == '*' && buffer[i+1] == '/') {
-			multiLineComment = false;
-		}
-		i++;
-	}
-	*/
 }
 
 int main(int argc, char const *argv[]) {
@@ -247,6 +172,14 @@ int main(int argc, char const *argv[]) {
 		return 1;
 	}
 
+	xml = fopen("output.xml", "w");
+	if (xml == NULL) {
+		printf("Error opening file.\n");
+		return 1;
+	}
+
+	fputs("<tokens>\n", xml);
+
 	// read the .jack file and output each line
 	char buffer[1024];
 	while (fgets(buffer, 1024, fp) != NULL) {
@@ -255,6 +188,9 @@ int main(int argc, char const *argv[]) {
 		analyzeLine(buffer);
 	}
 	fclose(fp);
+
+	fputs("</tokens>\n", xml);
+	fclose(xml);
 	
 	return 0;
 }
