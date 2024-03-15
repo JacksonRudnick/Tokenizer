@@ -272,18 +272,6 @@ int main(int argc, char const *argv[]) {
 		return 1;
 	}
 
-	/* Pointers to the start and end of the filename. */
-	char* start = NULL;
-	char* end = NULL;
-
-	// Find the start and end of filename
-	start = strrchr(destination, '\\');
-	if (start == NULL)
-		start = strrchr(destination, '/');
-	start++;
-
-	end = strchr(destination, '.');
-
 	// Open the .jack file
 	FILE *fp = fopen(destination, "r");
 	if (fp == NULL) {
@@ -291,10 +279,25 @@ int main(int argc, char const *argv[]) {
 		return 1;
 	}
 
+	// Pointers to the start and end of the filename.
+	char* start = NULL;
+	char* end = NULL;
+
+	// Find the start and end of filename
+	start = strrchr(destination, '\\');
+	if (start == NULL)
+		start = strrchr(destination, '/');
+	if (start == NULL)
+		start = destination;
+	else
+		start++;
+
+	end = strrchr(destination, '.');
+
 	// Calculate the length of the output filename
-	size_t len = end - start + 1;
+	size_t len = end - start;
 	// Allocate memory for the output filename
-	char* outputName = (char*) malloc(len + 5); // 4 for ".xml" and 1 for null terminator
+	char* outputName = (char*) malloc(len + 6); // 1 for T and 4 for ".xml" and 1 for null terminator
 	if (outputName == NULL) {
 		printf("Memory allocation error.\n");
 		fclose(fp);
@@ -303,8 +306,8 @@ int main(int argc, char const *argv[]) {
 
 	// Copy the filename into the output filename
 	memcpy(outputName, start, len);
-	strcpy(outputName + len, "xml");
-
+	strcpy(outputName + len, "T.xml");
+	
 	// Open the output .xml file
 	xml = fopen(outputName, "w");
 	if (xml == NULL) {
